@@ -2890,7 +2890,7 @@ void main() {
   }
   // ---- shared ghosts: each player keeps their own ghosts in gh/<id> and their results against others' ghosts in vs/<id> ----
   // (no shared counters: a ghost's record is the sum of every player's own tally against it)
-  const GH_KEEP = 25, GHOST_MIN = 3;
+  const GH_KEEP = 100, GHOST_MIN = 3;
   var myUid = null, netGhosts = [], netStats = {}, myGh = null, myVs = null, netChain = Promise.resolve();
   const netWrite = fn => { netChain = netChain.then(fn).catch(() => {}); return netChain; };
   async function netRefresh() {
@@ -2928,7 +2928,7 @@ void main() {
       const e = i >= 0 ? Object.assign({}, r[i]) : { k: key, w: 0, l: 0 };
       if (ghostWon) e.w = (Number(e.w) || 0) + 1; else e.l = (Number(e.l) || 0) + 1;
       if (i >= 0) r[i] = e; else r.push(e);
-      myVs = { r: r.slice(-400) };
+      myVs = { r: r.slice(-1000) };
       await db.doc('vs/' + myUid).set(myVs);
     });
   }
