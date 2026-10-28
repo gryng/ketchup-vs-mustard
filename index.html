@@ -2545,7 +2545,8 @@ void main() {
     const r = rng(run.runId * 31 + run.round * 7 + 1);
     const lv = level(), net = netGhosts.filter(g => g.lv === lv && g.owner !== myUid);
     const pool = net.length ? net : (ghosts[lv] || []).filter(g => g.level === lv && g.runId !== run.runId);
-    if (pool.length && r() < (net.length ? 0.8 : 0.7)) {
+    // someone's drawn top always comes first: other players' ghosts, then your own from earlier runs, and a bot only when there are none
+    if (pool.length) {
       const g = pool[Math.floor(r() * pool.length)];
       const d = new Date(g.at), st = g.key && netStats[g.key], n = st ? st[0] + st[1] : 0;
       return { strokes: cutToBudget(g.strokes, inkFor(lv)), dir: g.dir, level: g.lv || g.level, name: g.name || '名無し', key: g.key || null,
