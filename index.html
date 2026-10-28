@@ -271,6 +271,19 @@ body:not([data-mode="draw"]):not(.canretire) .foot .retire { display: none; }
 
 /* ---------- ranking ---------- */
 #rank { z-index: 65; }
+/* first visit: shown until the engine and fonts are ready, so the title never looks frozen */
+.loader { position: fixed; inset: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(ellipse 80% 55% at 50% 42%, rgba(120,20,28,.55), rgba(12,7,8,.98) 75%), #0c0708; transition: opacity .45s ease; }
+.loader.done { opacity: 0; pointer-events: none; }
+.loader svg { width: min(220px, 56vw); overflow: visible; filter: drop-shadow(0 4px 4px rgba(0,0,0,.5)); }
+.loader path { fill: none; stroke: url(#ldK); stroke-width: 9; stroke-linecap: round; stroke-dasharray: 300 300; animation: ldSqueeze 1.6s cubic-bezier(.5,0,.3,1) infinite; }
+.loader p { margin: 0; font-family: var(--f-body); font-weight: 700; font-size: 13px; letter-spacing: .3em; padding-left: .3em; color: rgba(243,231,211,.6); }
+@keyframes ldSqueeze { 0% { stroke-dashoffset: 300; } 55% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -300; } }
+#inapp { z-index: 80; place-items: center; }
+#inapp .card { gap: 14px; text-align: center; padding: 26px 22px 18px; }
+#inapp h2 { font-size: 18px; }
+#inapp #bInappOpen { font-family: var(--f-body); font-weight: 900; font-size: 18px; letter-spacing: .08em; height: 54px; }
+#inapp .link { align-self: center; }
 .rankcard { height: min(80dvh, 720px); }
 .rankcard .rk-list { flex: 1; }
 .rk-list.still .rk { animation: none; }
@@ -384,6 +397,11 @@ body[data-mode="name"] .tray { grid-row: 2 / -1; grid-column: 1 / -1; align-self
 <body>
 
 
+<div class="loader" id="loader" role="status" aria-live="polite">
+  <svg viewBox="0 0 240 60" aria-hidden="true"><defs><linearGradient id="ldK" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ef4a2e"/><stop offset=".55" stop-color="#cc1a14"/><stop offset="1" stop-color="#8f0f0b"/></linearGradient></defs>
+    <path d="M10 32 C 32 8, 52 56, 76 32 S 118 8, 140 32 S 182 56, 204 32 S 226 18, 232 26"/></svg>
+  <p>準備中…</p>
+</div>
 <div class="app">
   <header class="hud">
     <button class="ico" id="bMenu" aria-expanded="false" aria-controls="menuPanel" aria-label="メニュー"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -511,6 +529,14 @@ body[data-mode="name"] .tray { grid-row: 2 / -1; grid-column: 1 / -1; align-self
   </div>
   <div class="start"><b>TAP TO START</b><span id="titleSub"></span></div>
   <button class="howto ranktitle" id="bRankTitle">RANKING</button>
+</div>
+<div class="sheet" id="inapp" hidden>
+  <section class="card" role="dialog" aria-labelledby="inappH">
+    <h2 id="inappH">ブラウザで開いてください</h2>
+    <p>LINEの中のブラウザだと、ケチャップを描くときに画面が動いたり、記録が残りにくかったりします。SafariやChromeで開くと快適に遊べます。</p>
+    <button class="go" id="bInappOpen">ブラウザで開く</button>
+    <button class="link" id="bInappStay">このまま遊ぶ</button>
+  </section>
 </div>
 <div class="sheet" id="rank" hidden>
   <section class="card rankcard" role="dialog" aria-label="ランキング">
@@ -3157,7 +3183,10 @@ void main() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') menu(false); });
   $('bRename').addEventListener('click', () => menu(false));
   updateSnd(); applyGuide();
-  KVM.boot($('phz')); KVM.sound = SND.on; KVM.fxLabel();
+  const engineReady = KVM.boot($('phz')); KVM.sound = SND.on; KVM.fxLabel();
+  // lift the loading screen once the battle engine and the fonts are in (or after 12 s, whatever happens)
+  Promise.race([Promise.all([engineReady, document.fonts ? document.fonts.ready : null]), new Promise(r => setTimeout(r, 12000))])
+    .then(() => { const l = $('loader'); l.classList.add('done'); setTimeout(() => l.remove(), 600); });
   netRefresh();
   // the table can change size (e.g. when the score list appears): keep the battle stage fitted to it
   new ResizeObserver(() => KVM.refresh()).observe($('phz'));
@@ -3173,6 +3202,13 @@ void main() {
     wipe('', () => { $('title').hidden = true; if (!myName) askName(boot); else boot(); });
   };
   $('title').addEventListener('click', start);
+  // LINE's in-app browser: offer to reopen in the phone's own browser (LINE honours openExternalBrowser=1)
+  if (/\bLine\//i.test(navigator.userAgent) && !/[?&]openExternalBrowser=1/.test(location.search)) {
+    $('inapp').hidden = false;
+    $('inapp').addEventListener('click', e => e.stopPropagation());
+    $('bInappOpen').onclick = () => { const u = new URL(location.href); u.searchParams.set('openExternalBrowser', '1'); location.href = u.toString(); };
+    $('bInappStay').onclick = () => { $('inapp').hidden = true; };
+  }
   $('title').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start(); } });
 })();
 </script>
