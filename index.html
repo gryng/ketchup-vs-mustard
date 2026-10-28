@@ -287,6 +287,8 @@ body:not([data-mode="draw"]):not(.canretire) .foot .retire { display: none; }
 .rankcard { height: min(80dvh, 720px); }
 .rankcard .rk-list { flex: 1; }
 .rk-list.still .rk { animation: none; }
+.rk.sep { margin-top: 16px; position: relative; }
+.rk.sep::before { content: '⋯'; position: absolute; left: 0; right: 0; top: -17px; text-align: center; font-size: 14px; line-height: 1; color: var(--cream-faint); }
 .rk-h { font-family: var(--f-disp) !important; font-weight: 400 !important; font-size: 26px !important; letter-spacing: .2em !important; color: var(--brass-hi); }
 .tabs { display: flex; gap: 6px; padding: 4px; border-radius: 12px; background: rgba(0,0,0,.35); }
 .tab { flex: 1; height: 36px; border: 0; background: none; box-shadow: none; font-family: var(--f-body); font-weight: 900; font-size: 13px; letter-spacing: .12em; color: var(--cream-dim); border-radius: 9px; }
@@ -2917,7 +2919,7 @@ void main() {
   }
   // ---- shared ghosts: each player keeps their own ghosts in gh/<id> and their results against others' ghosts in vs/<id> ----
   // (no shared counters: a ghost's record is the sum of every player's own tally against it)
-  const GH_KEEP = 100, GHOST_MIN = 3;
+  const GH_KEEP = 100, GHOST_MIN = 3, RANK_N = 50;
   var myUid = null, netGhosts = [], netStats = {}, myGh = null, myVs = null, netChain = Promise.resolve();
   const netWrite = fn => { netChain = netChain.then(fn).catch(() => {}); return netChain; };
   async function netRefresh() {
@@ -2965,8 +2967,9 @@ void main() {
     if (rankTab !== 'ghost') return;
     if (!ok) { emptyRank('ゴーストのランキングを読み込めませんでした。\nインターネットに繋がっているか確認してください。'); return; }
     const rows = netGhosts.map(g => { const st = netStats[g.key] || [0, 0], n = st[0] + st[1]; return { g, w: st[0], l: st[1], n, rate: n ? st[0] / n : 0 }; })
-      .filter(x => x.n >= GHOST_MIN).sort((a, b) => b.rate - a.rate || b.n - a.n).slice(0, 30)
-      .map(x => ({ big: `${Math.round(100 * x.rate)}%`, strokes: x.g.strokes, me: x.g.owner === myUid,
+      .filter(x => x.n >= GHOST_MIN).sort((a, b) => b.rate - a.rate || b.n - a.n)
+      .map((x, i) => Object.assign(x, { no: i + 1 })).filter((x, i, all) => i < RANK_N || (x.g.owner === myUid && all.findIndex(y => y.g.owner === myUid) === i))
+      .map(x => ({ no: x.no, sep: x.no > RANK_N, big: `${Math.round(100 * x.rate)}%`, strokes: x.g.strokes, me: x.g.owner === myUid,
         sub: `${x.g.name} · Lv.${x.g.lv} · ${x.w}勝${x.l}敗`, tag: x.g.owner === myUid ? 'YOU' : '' }));
     $('rankNote').textContent = `お店のゴーストの勝率です（${GHOST_MIN}戦以上）。`;
     if (!rows.length) emptyRank(`まだ${GHOST_MIN}戦以上したゴーストがいません。\n遊ぶほど、ゴーストの戦績がたまっていきます。`); else rankRows(rows);
@@ -2985,11 +2988,11 @@ void main() {
     const ol = $('rankList');
     if (!rows.length) return;
     rankCache[rankTab] = rows;
-    const sig = rankTab + '|' + rows.map(r => [r.big || r.score, r.sub, r.tag, r.me, (r.strokes || []).length].join('~')).join('|');
+    const sig = rankTab + '|' + rows.map(r => [r.big || r.score, r.sub, r.tag, r.me, (r.strokes || []).length, r.no || ''].join('~')).join('|');
     if (sig === rankSig) return;
     ol.classList.toggle('still', rankShownTab === rankTab);
     rankSig = sig; rankShownTab = rankTab;
-    ol.innerHTML = rows.map((r, i) => `<li class="rk${r.me ? ' me' : ''}" style="animation-delay:${Math.min(i, 12) * 40}ms"><b class="no">${i + 1}</b><canvas width="104" height="104"></canvas><div class="meta"><strong>${r.big || fmt(r.score)}</strong><span></span></div>${r.tag ? `<em class="tag${r.me ? ' you' : ''}">${r.tag}</em>` : '<span></span>'}</li>`).join('');
+    ol.innerHTML = rows.map((r, i) => `<li class="rk${r.me ? ' me' : ''}${r.sep ? ' sep' : ''}" style="animation-delay:${Math.min(i, 12) * 40}ms"><b class="no">${r.no || i + 1}</b><canvas width="104" height="104"></canvas><div class="meta"><strong>${r.big || fmt(r.score)}</strong><span></span></div>${r.tag ? `<em class="tag${r.me ? ' you' : ''}">${r.tag}</em>` : '<span></span>'}</li>`).join('');
     ol.querySelectorAll('.rk').forEach((li, i) => { li.querySelector('.meta span').textContent = rows[i].sub; thumb(li.querySelector('canvas'), rows[i].strokes || []); });
   }
   function emptyRank(text) {
@@ -2999,7 +3002,7 @@ void main() {
   let rankTab = 'mine', unsubAll = null;
   function showMine() {
     $('rankNote').textContent = 'この端末で遊んだ記録です。';
-    const rows = history.slice().sort((a, b) => b.score - a.score).slice(0, 30)
+    const rows = history.slice().sort((a, b) => b.score - a.score).slice(0, RANK_N)
       .map(h => ({ score: h.score, strokes: h.strokes, sub: `${h.wins}勝${h.losses}敗 · ${dateOf(h.at)}${h.retired ? ' · リタイア' : ''}`, tag: h.clear ? '殿堂入り' : '' }));
     if (!rows.length) emptyRank('まだ記録がありません。\nゲームオーバーか殿堂入りまで遊ぶと、ここに残ります。'); else rankRows(rows);
   }
@@ -3011,11 +3014,21 @@ void main() {
     const uid = user ? await user.id() : null;
     if (user && (await user.can('data.write')) === false) $('rankNote').textContent = 'あなたの記録を載せるには、このゲームの共有設定で編集できる権限が必要です。';
     if (unsubAll) unsubAll();
-    unsubAll = db.collection('scores').orderBy('best', 'desc').limit(50).onSnapshot(snap => {
+    unsubAll = db.collection('scores').orderBy('best', 'desc').limit(RANK_N).onSnapshot(snap => {
       if (rankTab !== 'all') return;
       const rows = snap.docs.filter(d => d.exists).map(d => { const v = d.data(); return { score: Number(v.best) || 0, strokes: Array.isArray(v.strokes) ? v.strokes : [], me: d.id === uid,
         sub: `${String(v.name || '名無し').slice(0, 10)} · ${Number(v.wins) || 0}勝${Number(v.losses) || 0}敗 · ${dateOf(v.at || Date.now())}`, tag: d.id === uid ? 'YOU' : v.clear ? '殿堂入り' : '' }; });
-      if (!rows.length) emptyRank('まだ誰も記録していません。\n最初の記録を残そう。'); else rankRows(rows);
+      if (!rows.length) { emptyRank('まだ誰も記録していません。\n最初の記録を残そう。'); return; }
+      rankRows(rows);
+      if (uid && !rows.some(r => r.me)) (async () => {
+        try {
+          const mine = await db.doc('scores/' + uid).get(); if (!mine.exists || rankTab !== 'all') return;
+          const v = mine.data(), best = Number(v.best) || 0, above = await db.collection('scores').where('best', '>', best).get();
+          if (rankTab !== 'all') return;
+          rankRows(rows.concat({ no: above.size + 1, sep: true, me: true, score: best, strokes: Array.isArray(v.strokes) ? v.strokes : [],
+            sub: `${String(v.name || '名無し').slice(0, 10)} · ${Number(v.wins) || 0}勝${Number(v.losses) || 0}敗 · ${dateOf(v.at || Date.now())}`, tag: 'YOU' }));
+        } catch (e) { /* the top list is still shown */ }
+      })();
     }, () => emptyRank('ランキングを読み込めませんでした。'));
   }
   function setTab(t) {
